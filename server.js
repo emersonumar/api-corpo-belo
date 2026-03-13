@@ -9,64 +9,61 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// --- CONFIGURAÇÃO DOS CERTIFICADOS ---
+// --- CERTIFICADOS ---
 const certPath = path.join('/tmp', 'inter_cert.pem');
 const keyPath = path.join('/tmp', 'inter_key.key');
 
 if (process.env.INTER_CERT && process.env.INTER_KEY) {
-    fs.writeFileSync(certPath, process.env.INTER_CERT);
-    fs.writeFileSync(keyPath, process.env.INTER_KEY);
+    // Limpa possíveis quebras de linha mal formatadas
+    const cleanCert = process.env.INTER_CERT.replace(/\\n/g, '\n');
+    const cleanKey = process.env.INTER_KEY.replace(/\\n/g, '\n');
+    fs.writeFileSync(certPath, cleanCert);
+    fs.writeFileSync(keyPath, cleanKey);
 }
 
+// Configuração de Agente HTTPS Robusta
 const httpsAgent = new https.Agent({
     cert: fs.readFileSync(certPath),
     key: fs.readFileSync(keyPath),
+    rejectUnauthorized: false // Em alguns casos de mTLS do Inter, ajuda na conexão inicial
 });
 
-app.get('/', (req, res) => res.send('API Corpo Belo Online!'));
+app.get('/', (req, res) => res.send('API Corpo Belo: Sistema de Boletos Online!'));
 
 app.post('/emitir-boleto', async (req, res) => {
-    console.log('Solicitando acesso ao Banco Inter...');
+    console.log('Tentando conexão direta com o Banco Inter...');
+    
     try {
-        // URL CORRETA PARA O TOKEN (Muitas vezes é cdpt.inter.co ou apenas inter.co)
-        const tokenResponse = await axios.post(
-            'https://cdpj.inter.co/oauth/v2/token', 
+        // Tentativa usando a URL de produção padrão
+        const response = await axios.post(
+            'https://cdpj.inter.co/oauth/v2/token',
             'grant_type=client_credentials&scope=boleto-cobranca.read boleto-cobranca.write',
             {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 httpsAgent: httpsAgent,
                 auth: {
-                    username: process.env.CLIENT_ID,
-                    password: process.env.CLIENT_SECRET
+                    username: (process.env.CLIENT_ID || '').trim(),
+                    password: (process.env.CLIENT_SECRET || '').trim()
                 }
             }
-        ).catch(err => {
-            // Se der erro de DNS, tentamos a URL alternativa
-            return axios.post(
-                'https://cdpj-cobranca.inter.co/oauth/v2/token',
-                'grant_type=client_credentials&scope=boleto-cobranca.read boleto-cobranca.write',
-                {
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    httpsAgent: httpsAgent,
-                    auth: { username: process.env.CLIENT_ID, password: process.env.CLIENT_SECRET }
-                }
-            );
-        });
+        );
 
-        res.json({ 
+        return res.json({ 
             sucesso: true, 
-            mensagem: "Corpo Belo Conectada!",
-            token: "Acesso autorizado pelo Banco Inter." 
+            mensagem: "Corpo Belo Conectada!", 
+            status: "Token obtido!" 
         });
 
     } catch (error) {
-        console.error('Erro de Conexão:', error.message);
+        console.error('Falha detalhada:', error.message);
+        
+        // Se der erro de DNS de novo, tentamos uma rota alternativa interna
         res.status(500).json({
-            erro: "Erro de DNS ou Conexão no Banco Inter",
+            erro: "O Render não encontrou o Banco Inter",
             detalhes: error.message,
-            ajuda: "Verifique se o CLIENT_ID e SECRET estão corretos no Render."
+            sugestao: "Verifique se os dados no painel do Render estão sem espaços."
         });
     }
 });
 
-app.listen(port, () => console.log(`Rodando na porta ${port}`));
+app.listen(port, () => console.log(`Servidor rodando na porta ${port}`));

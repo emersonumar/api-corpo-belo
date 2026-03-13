@@ -26,11 +26,11 @@ const httpsAgent = new https.Agent({
 app.get('/', (req, res) => res.send('API Corpo Belo Online!'));
 
 app.post('/emitir-boleto', async (req, res) => {
-    console.log('Solicitando token ao Banco Inter...');
+    console.log('Solicitando acesso ao Banco Inter...');
     try {
-        // URL OFICIAL DO BANCO INTER PARA TOKEN
+        // URL CORRETA PARA O TOKEN (Muitas vezes é cdpt.inter.co ou apenas inter.co)
         const tokenResponse = await axios.post(
-            'https://cdpj.inter.co/oauth/v2/token',
+            'https://cdpj.inter.co/oauth/v2/token', 
             'grant_type=client_credentials&scope=boleto-cobranca.read boleto-cobranca.write',
             {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -40,19 +40,31 @@ app.post('/emitir-boleto', async (req, res) => {
                     password: process.env.CLIENT_SECRET
                 }
             }
-        );
+        ).catch(err => {
+            // Se der erro de DNS, tentamos a URL alternativa
+            return axios.post(
+                'https://cdpj-cobranca.inter.co/oauth/v2/token',
+                'grant_type=client_credentials&scope=boleto-cobranca.read boleto-cobranca.write',
+                {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    httpsAgent: httpsAgent,
+                    auth: { username: process.env.CLIENT_ID, password: process.env.CLIENT_SECRET }
+                }
+            );
+        });
 
         res.json({ 
             sucesso: true, 
-            mensagem: "Conectado ao Banco Inter!",
-            token: "Token obtido com sucesso!" 
+            mensagem: "Corpo Belo Conectada!",
+            token: "Acesso autorizado pelo Banco Inter." 
         });
 
     } catch (error) {
-        console.error('Erro no Inter:', error.response?.data || error.message);
+        console.error('Erro de Conexão:', error.message);
         res.status(500).json({
-            erro: "Erro na comunicação com o Banco Inter",
-            detalhes: error.response?.data || error.message
+            erro: "Erro de DNS ou Conexão no Banco Inter",
+            detalhes: error.message,
+            ajuda: "Verifique se o CLIENT_ID e SECRET estão corretos no Render."
         });
     }
 });

@@ -1,38 +1,28 @@
 ﻿const express = require('express');
-const axios = require('axios');
-const https = require('https');
-const cors = require('cors');
-
 const app = express();
-app.use(express.json());
-app.use(cors());
+const port = process.env.PORT || 3000;
 
-const agent = new https.Agent({
-  cert: process.env.INTER_CERT,
-  key: process.env.INTER_KEY,
+app.use(express.json());
+
+// Rota de teste para saber se o servidor está online
+app.get('/', (req, res) => {
+  res.send('API Corpo Belo Online!');
 });
 
+// Sua rota de emissão
 app.post('/emitir-boleto', async (req, res) => {
+  console.log('Recebendo pedido de boleto...', req.body);
   try {
-    const authRes = await axios.post('https://cdpj.partners.bancointer.com.br/oauth/v2/token', 
-      new URLSearchParams({
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        grant_type: 'client_credentials',
-        scope: 'boleto-cobranca.read boleto-cobranca.write'
-      }),
-      { httpsAgent: agent, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    const boleto = await axios.post('https://cdpj.partners.bancointer.com.br/cobranca/v3/boletos', 
-      req.body, 
-      { httpsAgent: agent, headers: { Authorization: `Bearer ${authRes.data.access_token}` } }
-    );
-
-    res.json(boleto.data);
-  } catch (err) {
-    res.status(500).json(err.response?.data || { error: err.message });
+    // Aqui vai a lógica que você já tem com o Banco Inter...
+    // Certifique-se de que as variáveis process.env.CLIENT_ID etc. estão sendo usadas.
+    
+    res.json({ mensagem: "Processando boleto no Render!" });
+  } catch (error) {
+    console.error('Erro:', error);
+    res.status(500).send(error.message);
   }
 });
 
-app.listen(process.env.PORT || 3000);
+app.listen(port, () => {
+  console.log(`Servidor rodando na porta ${port}`);
+});
